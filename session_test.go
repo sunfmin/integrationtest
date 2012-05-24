@@ -3,8 +3,10 @@ package integrationtest
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -12,6 +14,7 @@ import (
 func theMux() (sm *http.ServeMux) {
 	sm = http.NewServeMux()
 	sm.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("Started %s \"%s\" for %s\n", r.Method, r.RequestURI, r.RemoteAddr)
 		cookie := &http.Cookie{
 			Name:  "name",
 			Value: "felix",
@@ -20,6 +23,7 @@ func theMux() (sm *http.ServeMux) {
 	})
 
 	sm.HandleFunc("/updateprofile", func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("Started %s \"%s\" for %s\n", r.Method, r.RequestURI, r.RemoteAddr)
 		cookie := &http.Cookie{
 			Name:  "age",
 			Value: "23",
@@ -28,6 +32,7 @@ func theMux() (sm *http.ServeMux) {
 	})
 
 	sm.HandleFunc("/account", func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("Started %s \"%s\" for %s\n", r.Method, r.RequestURI, r.RemoteAddr)
 		name, _ := r.Cookie("name")
 		fmt.Fprintf(w, "%s", name)
 	})
@@ -35,6 +40,7 @@ func theMux() (sm *http.ServeMux) {
 }
 
 func TestHoldingCookies(t *testing.T) {
+	Verbose = true
 	ts := httptest.NewServer(theMux())
 	defer ts.Close()
 
@@ -48,7 +54,7 @@ func TestHoldingCookies(t *testing.T) {
 	upres, _ := s.Get(ts.URL + "/updateprofile")
 	fmt.Println("after updateprofile: ", upres.Cookies())
 
-	res, _ := s.Get(ts.URL + "/account")
+	res, _ := s.PostForm(ts.URL+"/account", url.Values{})
 	fmt.Println("response cookies: ", res.Cookies())
 
 	fmt.Println("after account: ", s.Client.Jar.Cookies(nil))

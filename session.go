@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 var Verbose bool
@@ -13,12 +14,42 @@ type cookieJar struct {
 	cookies []*http.Cookie
 }
 
+func (tc *cookieJar) find(cookie *http.Cookie) (r *http.Cookie) {
+	for _, c := range tc.cookies {
+		if c.Name == cookie.Name {
+			r = c
+			return
+		}
+	}
+	return
+}
+
+func (tc *cookieJar) String() (r string) {
+	for _, c := range tc.cookies {
+		r = r + c.Name + " => " + c.Value + ", "
+	}
+	return
+}
+
 func (tc *cookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
-	tc.cookies = cookies
+	for i, c := range cookies {
+		fc := tc.find(c)
+		if fc != nil {
+			tc.cookies[i] = c
+		} else {
+			tc.cookies = append(tc.cookies, c)
+		}
+	}
+	if Verbose {
+		log.Printf("Set cookie: %s\n", tc)
+	}
 	return
 }
 
 func (tc *cookieJar) Cookies(u *url.URL) []*http.Cookie {
+	if Verbose {
+		log.Printf("Cookies: %s\n", tc)
+	}
 	return tc.cookies
 }
 
@@ -54,14 +85,28 @@ func (s *Session) Post(u string, bodyType string, body io.Reader) (r *http.Respo
 	if Verbose {
 		log.Printf("Post %s\n", u)
 	}
-	return s.Client.Post(u, bodyType, body)
+
+	req, err := http.NewRequest("POST", u, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", bodyType)
+	c := s.Client
+
+	for _, cookie := range c.Jar.Cookies(req.URL) {
+		req.AddCookie(cookie)
+	}
+
+	r, err = c.Do(req)
+
+	if err == nil && c.Jar != nil {
+		c.Jar.SetCookies(req.URL, r.Cookies())
+	}
+	return r, err
 }
 
 func (s *Session) PostForm(u string, data url.Values) (r *http.Response, err error) {
-	if Verbose {
-		log.Printf("PostForm %s\n", u)
-	}
-	return s.Client.PostForm(u, data)
+	return s.Post(u, "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
 }
 
 func (s *Session) Head(u string) (r *http.Response, err error) {
