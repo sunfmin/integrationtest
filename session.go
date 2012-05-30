@@ -14,9 +14,10 @@ type cookieJar struct {
 	cookies []*http.Cookie
 }
 
-func (tc *cookieJar) find(cookie *http.Cookie) (r *http.Cookie) {
-	for _, c := range tc.cookies {
+func (tc *cookieJar) find(cookie *http.Cookie) (at int, r *http.Cookie) {
+	for i, c := range tc.cookies {
 		if c.Name == cookie.Name {
+			at = i
 			r = c
 			return
 		}
@@ -32,10 +33,10 @@ func (tc *cookieJar) String() (r string) {
 }
 
 func (tc *cookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
-	for i, c := range cookies {
-		fc := tc.find(c)
+	for _, c := range cookies {
+		at, fc := tc.find(c)
 		if fc != nil {
-			tc.cookies[i] = c
+			tc.cookies[at] = c
 		} else {
 			tc.cookies = append(tc.cookies, c)
 		}
