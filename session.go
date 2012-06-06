@@ -1,8 +1,11 @@
 package integrationtest
 
 import (
+	"bytes"
+	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,6 +16,8 @@ var Verbose bool
 type cookieJar struct {
 	cookies []*http.Cookie
 }
+
+type multipartBuilder func(w *multipart.Writer)
 
 func (tc *cookieJar) find(cookie *http.Cookie) (at int, r *http.Cookie) {
 	for i, c := range tc.cookies {
@@ -91,6 +96,7 @@ func (s *Session) Post(u string, bodyType string, body io.Reader) (r *http.Respo
 	if err != nil {
 		return nil, err
 	}
+
 	req.Header.Set("Content-Type", bodyType)
 	c := s.Client
 
@@ -99,11 +105,18 @@ func (s *Session) Post(u string, bodyType string, body io.Reader) (r *http.Respo
 	}
 
 	r, err = c.Do(req)
-
 	if err == nil && c.Jar != nil {
 		c.Jar.SetCookies(req.URL, r.Cookies())
 	}
 	return r, err
+}
+
+func (s *Session) PostMultipart(u string, mb multipartBuilder) (r *http.Response, err error) {
+	var b bytes.Buffer
+	mw := multipart.NewWriter(&b)
+	mb(mw)
+	mw.Close()
+	return s.Post(u, fmt.Sprintf("multipart/form-data; boundary=%s", mw.Boundary()), &b)
 }
 
 func (s *Session) PostForm(u string, data url.Values) (r *http.Response, err error) {
@@ -115,4 +128,12 @@ func (s *Session) Head(u string) (r *http.Response, err error) {
 		log.Printf("Head %s\n", u)
 	}
 	return s.Client.Head(u)
+}
+
+func Must(in *http.Response, err error) (r *http.Response) {
+	if err != nil {
+		panic(err)
+	}
+	r = in
+	return
 }
